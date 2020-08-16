@@ -46,6 +46,7 @@ func main() {
 			Do(ctx)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+			return
 		}
 		fmt.Printf("Indexed metrics %s to index %s, type %s\n", succ.Id, succ.Index, succ.Type)
 	})
@@ -62,8 +63,10 @@ func main() {
 		if err != nil {
 			// Handle error
 			c.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+			return
 		}
 		if get1.Found {
+			fmt.Println(get1.Fields)
 			fmt.Printf("Got metrics %s in version %d from index %s, type %s\n", get1.Id, get1.Version, get1.Index, get1.Type)
 		}
 	})
@@ -78,6 +81,7 @@ func main() {
 			Do(ctx)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+			return
 		}
 		fmt.Println("Deleted with id: " + succ.Id)
 		c.JSON(http.StatusAccepted, gin.H{"message": "deleted"})
@@ -85,8 +89,23 @@ func main() {
 
 	//TODO: PUT
 	r.PUT("/api/metrics/:id", func (c *gin.Context) {
-		// id := c.Param("id")
+		id := c.Param("id")
+		var m Metrics
+		err := c.ShouldBindJSON(&m)
+		if err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+            return
+		}
 
+		update, err := client.Update().Index("metrics").Type("metric").Id(id).
+		Script(elastic.NewScriptInline("ctx._source.title = params.title; ctx._source.value = params.value").Lang("painless").Params(map[string]interface{}{"title": m.Title, "value": m.Value})).
+		Do(ctx)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+			return
+		}
+		fmt.Printf("New version of metric %q is now %d\n", update.Id, update.Version)
 	})
 	
 	r.Run() // localhost:8080
